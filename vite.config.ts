@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
           name: 'Ligretto Scoreboard',
           short_name: 'Ligretto',
           description: 'Segnapunti veloce per le tue partite a Ligretto.',
-          theme_color: '#ff6b35',
+          theme_color: '#ead2b9',
           background_color: '#fff8ef',
           display: 'standalone',
           id: `${base}#/`,
