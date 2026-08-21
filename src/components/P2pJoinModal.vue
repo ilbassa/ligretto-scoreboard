@@ -45,13 +45,24 @@ async function startScanner() {
     await current.start(
       { facingMode: 'environment' },
       { fps: 10, qrbox: { width: 230, height: 230 }, aspectRatio: 1 },
-      (decodedText) => { manualCode.value = decodedText; void stopScanner(); submitCode() },
+      (decodedText) => { void acceptScannedCode(decodedText) },
       () => undefined
     )
   } catch {
     error.value = 'Fotocamera non disponibile. Inserisci il codice sessione qui sotto.'
     await stopScanner()
   }
+}
+
+async function acceptScannedCode(decodedText: string) {
+  const peerId = parseJoinCode(decodedText)
+  if (!peerId) {
+    error.value = 'QR o codice sessione non valido.'
+    return
+  }
+  manualCode.value = peerId
+  await stopScanner()
+  submitCode()
 }
 
 function connect(peerId: string) {
@@ -64,6 +75,7 @@ function connect(peerId: string) {
 function submitCode() {
   const peerId = parseJoinCode(manualCode.value)
   if (!peerId) { error.value = 'QR o codice sessione non valido.'; return }
+  manualCode.value = peerId
   if (peerId === sync.localPeerId && sync.role === 'host') { error.value = 'Questo è il codice del dispositivo Host.'; return }
   pendingPeerId.value = peerId
   if (gameStore.hasActiveGame && !(sync.role === 'client' && sync.hostId === peerId)) replaceOpen.value = true

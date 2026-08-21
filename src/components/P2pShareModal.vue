@@ -4,7 +4,6 @@ import { Copy, Radio } from 'lucide-vue-next'
 import QRCode from 'qrcode'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppModal from '@/components/ui/AppModal.vue'
-import { buildJoinUrl } from '@/services/syncProtocol'
 import { useP2pStore } from '@/stores/p2p'
 import { useUiStore } from '@/stores/ui'
 
@@ -14,12 +13,12 @@ const sync = useP2pStore()
 const ui = useUiStore()
 const qrDataUrl = ref('')
 const qrError = ref('')
-const joinUrl = computed(() => sync.hostId ? buildJoinUrl(sync.hostId) : '')
+const qrPayload = computed(() => sync.hostId)
 
 async function renderQr() {
-  if (!joinUrl.value) return
+  if (!qrPayload.value) return
   try {
-    qrDataUrl.value = await QRCode.toDataURL(joinUrl.value, { width: 320, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#24150e', light: '#ffffff' } })
+    qrDataUrl.value = await QRCode.toDataURL(qrPayload.value, { width: 320, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#24150e', light: '#ffffff' } })
     qrError.value = ''
   } catch { qrError.value = 'Non è stato possibile generare il QR Code.' }
 }
