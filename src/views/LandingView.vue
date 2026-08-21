@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { ArrowRight, Calculator, Crown, Play, ShieldCheck, Sparkles } from 'lucide-vue-next'
-import { useRouter } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { ArrowRight, Calculator, Crown, Play, QrCode, ShieldCheck, Sparkles } from 'lucide-vue-next'
+import { useRoute, useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
 import AppConfirmDialog from '@/components/ui/AppConfirmDialog.vue'
+import P2pJoinModal from '@/components/P2pJoinModal.vue'
 import { useGameStore } from '@/stores/game'
+import { useP2pStore } from '@/stores/p2p'
 
+const route = useRoute()
 const router = useRouter()
 const gameStore = useGameStore()
+const sync = useP2pStore()
 gameStore.initialize()
 const replaceOpen = ref(false)
+const joinOpen = ref(Boolean(route.query.join))
+const initialJoinCode = computed(() => typeof route.query.join === 'string' ? route.query.join : '')
 const resumeLabel = computed(() => gameStore.game ? `Riprendi · Mano ${gameStore.currentHand}` : 'Riprendi partita')
 
 function newGame() {
@@ -17,7 +23,10 @@ function newGame() {
   else router.push({ name: 'setup' })
 }
 
+watch(() => route.query.join, (join) => { if (typeof join === 'string' && join) joinOpen.value = true })
+
 function confirmNewGame() {
+  sync.stopSession()
   gameStore.clearGame()
   replaceOpen.value = false
   router.push({ name: 'setup' })
@@ -33,7 +42,7 @@ function confirmNewGame() {
           <p class="hero__eyebrow"><Sparkles :size="17" aria-hidden="true" /> Niente più conti a mente</p>
           <h1>Più veloce del gioco.<br><span>Preciso fino all’ultima carta.</span></h1>
           <p class="hero__copy">Segna ogni mano, trova subito il totale e lascia che la matematica la faccia il tabellone. Tu pensa solo a gridare “Ligretto!”.</p>
-          <div class="hero__actions"><AppButton :icon="Play" @click="newGame">Nuova partita</AppButton><AppButton v-if="gameStore.hasActiveGame" variant="secondary" :icon="ArrowRight" @click="router.push({ name: 'scoreboard' })">Riprendi partita</AppButton></div>
+          <div class="hero__actions"><AppButton :icon="Play" @click="newGame">Nuova partita</AppButton><AppButton variant="secondary" :icon="QrCode" @click="joinOpen=true">Connetti tramite QR</AppButton><AppButton v-if="gameStore.hasActiveGame" variant="secondary" :icon="ArrowRight" @click="router.push({ name: 'scoreboard' })">Riprendi partita</AppButton></div>
           <p class="privacy-note"><ShieldCheck :size="18" aria-hidden="true" /> Partita salvata solo su questo dispositivo</p>
         </div>
         <div class="score-preview" aria-label="Anteprima del tabellone">
@@ -47,6 +56,7 @@ function confirmNewGame() {
       <section class="feature-strip" aria-label="Caratteristiche"><article><strong>2–12</strong><span>giocatori</span></article><article><strong>12</strong><span>dorsi unici</span></article><article><strong>0</strong><span>calcoli manuali</span></article></section>
     </main>
     <footer><strong>Ligretto Scoreboard</strong><span>Veloce, locale, sempre pronto.</span></footer>
+    <P2pJoinModal :open="joinOpen" :initial-code="initialJoinCode" @close="joinOpen=false" />
     <AppConfirmDialog :open="replaceOpen" title="Iniziare una nuova partita?" message="La partita in corso verrà eliminata definitivamente per lasciare spazio alla nuova." confirm-label="Nuova partita" @close="replaceOpen=false" @confirm="confirmNewGame" />
   </div>
 </template>

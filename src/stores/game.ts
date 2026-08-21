@@ -1,13 +1,17 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { getDeck } from '@/constants/decks'
-import type { GameState, HandResult, PlayerHandDraft, PlayerSetup } from '@/models'
+import type { GameState, HandResult, PlayerHandDraft, PlayerSetup, SyncSnapshot } from '@/models'
 import { gameRepository } from '@/repositories/gameRepository'
 import { calculateHandScore, calculateTotal } from '@/services/scoring'
 import { createId } from '@/utils/id'
 
 function snapshotOf(result: HandResult) {
   return { positive: result.positive, negative: result.negative, isWinner: result.isWinner }
+}
+
+function plainClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
 }
 
 export const useGameStore = defineStore('game', () => {
@@ -26,10 +30,11 @@ export const useGameStore = defineStore('game', () => {
     if (initialized.value) return
     game.value = gameRepository.load()
     initialized.value = true
-    resetDrafts()
+    resetDrafts(false)
+    if (game.value) drafts.value = gameRepository.loadDrafts(game.value) ?? drafts.value
   }
 
-  function resetDrafts() {
+  function resetDrafts(persist = true) {
     const next: Record<string, PlayerHandDraft> = {}
     for (const player of players.value) {
       const saved = player.history.find((result) => result.hand === currentHand.value)
@@ -38,6 +43,7 @@ export const useGameStore = defineStore('game', () => {
         : { playerId: player.id, positive: 0, negative: 0, isWinner: false }
     }
     drafts.value = next
+    if (persist && game.value) gameRepository.saveDrafts(drafts.value)
   }
 
   function startGame(setup: PlayerSetup[]) {
@@ -72,6 +78,7 @@ export const useGameStore = defineStore('game', () => {
     const draft = draftFor(playerId)
     if (field === 'negative' && draft.isWinner) return
     draft[field] = Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0
+    gameRepository.saveDrafts(drafts.value)
   }
 
   function selectWinner(playerId: string, selected: boolean) {
@@ -92,6 +99,7 @@ export const useGameStore = defineStore('game', () => {
       selectedDraft.negative = selectedDraft.negativeBeforeWinner ?? selectedDraft.negative
       selectedDraft.negativeBeforeWinner = undefined
     }
+    gameRepository.saveDrafts(drafts.value)
   }
 
   function isDraftSaved(playerId: string): boolean {
@@ -124,6 +132,7 @@ export const useGameStore = defineStore('game', () => {
     for (const item of game.value.players) item.totalScore = calculateTotal(item.history)
     draft.savedSnapshot = snapshotOf(result)
     gameRepository.save(game.value)
+    gameRepository.saveDrafts(drafts.value)
     return result.handScore
   }
 
@@ -134,5 +143,18 @@ export const useGameStore = defineStore('game', () => {
     resetDrafts()
   }
 
-  return { game, drafts, initialized, hasActiveGame, currentHand, players, allPlayersSaved, winnerCount, canAdvance, initialize, startGame, clearGame, draftFor, setDraftValue, selectWinner, isDraftSaved, savePlayerScore, advanceHand }
+  function createSyncSnapshot(revision: number): SyncSnapshot {
+    if (!game.value) throw new Error('Nessuna partita attiva.')
+    return plainClone({ schemaVersion: 1, revision, game: game.value, drafts: drafts.value })
+  }
+
+  function applySyncSnapshot(snapshot: SyncSnapshot) {
+    game.value = plainClone(snapshot.game)
+    drafts.value = plainClone(snapshot.drafts)
+    initialized.value = true
+    gameRepository.save(game.value)
+    gameRepository.saveDrafts(drafts.value)
+  }
+
+  return { game, drafts, initialized, hasActiveGame, currentHand, players, allPlayersSaved, winnerCount, canAdvance, initialize, startGame, clearGame, draftFor, setDraftValue, selectWinner, isDraftSaved, savePlayerScore, advanceHand, createSyncSnapshot, applySyncSnapshot }
 })

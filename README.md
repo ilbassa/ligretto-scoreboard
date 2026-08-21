@@ -21,8 +21,13 @@ npm run build
 - Vincitore unico per mano e salvataggio individuale correggibile.
 - Totali progressivi e storico completo in una modal accessibile.
 - Persistenza locale, layout responsive e supporto PWA/offline.
+- Sincronizzazione opzionale in tempo reale tra dispositivi tramite WebRTC DataChannel, con ingresso via QR Code o codice manuale.
 - Build dedicata a GitHub Pages con `npm run build:pages`.
 
 ## Stack
 
-Vue 3, TypeScript, Pinia, Vue Router, Vite, Vitest, Lucide e vite-plugin-pwa, seguendo struttura e convenzioni di `gym-tracker`.
+Vue 3, TypeScript, Pinia, Vue Router, Vite, Vitest, PeerJS, html5-qrcode, qrcode, Lucide e vite-plugin-pwa, seguendo struttura e convenzioni di `gym-tracker`.
+
+## Sincronizzazione P2P
+
+Il dispositivo Host usa PeerJS Cloud soltanto per il signaling iniziale; lo stato della partita passa direttamente tra i browser e viene salvato nel `localStorage` di ciascun dispositivo. Non è richiesto alcun database remoto. Lo scanner della fotocamera è disponibile su HTTPS o localhost.

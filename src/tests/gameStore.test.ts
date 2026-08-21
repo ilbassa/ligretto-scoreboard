@@ -53,4 +53,17 @@ describe('game store', () => {
     expect(store.draftFor(marco!.id).negative).toBe(4)
     expect(store.draftFor(elena!.id).isWinner).toBe(true)
   })
+
+  it('persists and restores unsaved drafts', () => {
+    const store = useGameStore()
+    store.startGame([{ name: 'Marco', deckId: decks[0]!.id }, { name: 'Elena', deckId: decks[1]!.id }])
+    const playerId = store.players[0]!.id
+    store.setDraftValue(playerId, 'positive', 11)
+    store.selectWinner(playerId, true)
+
+    setActivePinia(createPinia())
+    const restored = useGameStore()
+    restored.initialize()
+    expect(restored.draftFor(playerId)).toMatchObject({ positive: 11, negative: 0, isWinner: true })
+  })
 })

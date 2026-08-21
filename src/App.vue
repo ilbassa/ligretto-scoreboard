@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import AppToast from '@/components/ui/AppToast.vue'
+import { useP2pStore } from '@/stores/p2p'
+
+useP2pStore().initialize()
 </script>
 
 <template>

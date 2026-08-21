@@ -51,3 +51,30 @@ export interface PlayerHandDraft {
   negativeBeforeWinner?: number
   savedSnapshot?: Pick<HandResult, 'positive' | 'negative' | 'isWinner'>
 }
+
+export type SessionRole = 'host' | 'client'
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'waiting' | 'connected' | 'error'
+
+export type SyncAction = {
+  schemaVersion: 1
+  id: string
+  origin: string
+} & (
+  | { type: 'set-draft'; playerId: string; field: 'positive' | 'negative'; value: number }
+  | { type: 'select-winner'; playerId: string; selected: boolean }
+  | { type: 'save-score'; playerId: string }
+  | { type: 'advance-hand' }
+)
+
+export interface SyncSnapshot {
+  schemaVersion: 1
+  revision: number
+  game: GameState
+  drafts: Record<string, PlayerHandDraft>
+}
+
+export type SyncMessage =
+  | { schemaVersion: 1; type: 'action'; action: SyncAction }
+  | { schemaVersion: 1; type: 'snapshot'; snapshot: SyncSnapshot }
+  | { schemaVersion: 1; type: 'presence'; connectedDevices: number }
+  | { schemaVersion: 1; type: 'snapshot-request' }

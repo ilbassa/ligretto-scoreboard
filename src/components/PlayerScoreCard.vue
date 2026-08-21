@@ -9,7 +9,7 @@ import { deckAccent, getDeck, scoreboardDeckLabel } from '@/constants/decks'
 import type { Player, PlayerHandDraft } from '@/models'
 import { calculateHandScore } from '@/services/scoring'
 
-const props = defineProps<{ player: Player; draft: PlayerHandDraft; saved: boolean }>()
+const props = withDefaults(defineProps<{ player: Player; draft: PlayerHandDraft; saved: boolean; disabled?: boolean }>(), { disabled: false })
 const emit = defineEmits<{
   'update-score': [field: 'positive' | 'negative', value: number]
   'update-winner': [selected: boolean]
@@ -34,14 +34,14 @@ function setNumber(field: 'positive' | 'negative', value: string) {
       </header>
 
       <div class="score-entry">
-        <AppInput :model-value="draft.positive" label="Carte sul tavolo" type="number" inputmode="numeric" min="0" step="1" @update:model-value="setNumber('positive', $event)" />
-        <AppInput :model-value="draft.negative" label="Pozzetto" type="number" inputmode="numeric" min="0" step="1" :disabled="draft.isWinner" @update:model-value="setNumber('negative', $event)" />
-        <AppButton :variant="saved ? 'secondary' : 'primary'" :icon="saved ? Check : Save" :aria-label="saved ? `Punteggio di ${player.name} salvato` : `Salva punteggio di ${player.name}`" @click="emit('save')"><span class="save-label">{{ saved ? 'Salvato' : 'Salva' }}</span></AppButton>
+        <AppInput :model-value="draft.positive" label="Carte sul tavolo" type="number" inputmode="numeric" min="0" step="1" :disabled="disabled" @update:model-value="setNumber('positive', $event)" />
+        <AppInput :model-value="draft.negative" label="Pozzetto" type="number" inputmode="numeric" min="0" step="1" :disabled="disabled || draft.isWinner" @update:model-value="setNumber('negative', $event)" />
+        <AppButton :variant="saved ? 'secondary' : 'primary'" :icon="saved ? Check : Save" :disabled="disabled" :aria-label="saved ? `Punteggio di ${player.name} salvato` : `Salva punteggio di ${player.name}`" @click="emit('save')"><span class="save-label">{{ saved ? 'Salvato' : 'Salva' }}</span></AppButton>
       </div>
 
       <div class="result-row">
         <label class="winner-toggle" :class="{ 'winner-toggle--active': draft.isWinner }" :title="draft.isWinner ? 'Vincitore della mano' : 'Imposta come vincitore'">
-          <input class="sr-only" type="checkbox" :checked="draft.isWinner" :aria-label="`${player.name} vincitore della mano`" @change="emit('update-winner', ($event.target as HTMLInputElement).checked)" />
+          <input class="sr-only" type="checkbox" :checked="draft.isWinner" :disabled="disabled" :aria-label="`${player.name} vincitore della mano`" @change="emit('update-winner', ($event.target as HTMLInputElement).checked)" />
           <Crown :size="21" aria-hidden="true" />
           <span>Ligretto!</span>
         </label>
