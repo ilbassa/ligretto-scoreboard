@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { History, Home, Plus } from 'lucide-vue-next'
+import { History, Home, Plus, Trophy } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
-import AppPageHeader from '@/components/ui/AppPageHeader.vue'
 import HandHistoryModal from '@/components/HandHistoryModal.vue'
 import PlayerScoreCard from '@/components/PlayerScoreCard.vue'
+import { deckAccent, getDeck } from '@/constants/decks'
 import { useGameStore } from '@/stores/game'
 import { useUiStore } from '@/stores/ui'
 
@@ -20,6 +20,16 @@ const progressLabel = computed(() => {
   if (gameStore.canAdvance) return 'Mano completa: puoi continuare.'
   if (gameStore.winnerCount === 0) return `${saved}/${gameStore.players.length} salvati · scegli chi ha detto Ligretto!`
   return `${saved}/${gameStore.players.length} punteggi salvati`
+})
+
+const ranking = computed(() => {
+  const sorted = [...gameStore.players].sort((first, second) => second.totalScore - first.totalScore || first.name.localeCompare(second.name, 'it-IT'))
+  let position = 0
+  return sorted.map((player, index) => {
+    if (index === 0 || player.totalScore !== sorted[index - 1]?.totalScore) position = index + 1
+    const deck = getDeck(player.deckId)
+    return { player, position, accent: deck ? deckAccent(deck) : 'var(--color-primary)' }
+  })
 })
 
 function save(playerId: string, playerName: string) {
