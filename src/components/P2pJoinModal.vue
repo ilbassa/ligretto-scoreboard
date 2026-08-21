@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { Camera, Link } from 'lucide-vue-next'
+import { Camera, Link, LoaderCircle } from 'lucide-vue-next'
 import { Html5Qrcode } from 'html5-qrcode'
 import { useRouter } from 'vue-router'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -20,6 +20,7 @@ const sync = useP2pStore()
 const scannerId = `qr-reader-${createId()}`
 const manualCode = ref('')
 const error = ref('')
+const connectionNotice = ref('')
 const scannerActive = ref(false)
 const replaceOpen = ref(false)
 const pendingPeerId = ref('')
@@ -66,9 +67,13 @@ async function acceptScannedCode(decodedText: string) {
 }
 
 function connect(peerId: string) {
+  const retrying = sync.status === 'connecting' || sync.status === 'error'
   replaceOpen.value = false
   joiningStartedAt = Date.now()
   error.value = ''
+  connectionNotice.value = retrying
+    ? 'Nuovo tentativo di connessione in corso. Attendi fino a 12 secondi.'
+    : 'Connessione all’Host in corso. Attendi fino a 12 secondi.'
   sync.joinHost(peerId)
 }
 
@@ -92,6 +97,7 @@ watch(() => props.open, async (open) => {
   if (!open) { await stopScanner(); return }
   manualCode.value = props.initialCode
   error.value = ''
+  connectionNotice.value = ''
   await nextTick()
   if (manualCode.value) submitCode()
   else await startScanner()
@@ -116,8 +122,9 @@ onBeforeUnmount(() => { void stopScanner() })
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <div class="manual-entry">
         <AppInput v-model="manualCode" label="Codice sessione" autocomplete="off" @keyup.enter="submitCode" />
-        <AppButton :icon="Link" :disabled="sync.status === 'connecting'" @click="submitCode">{{ sync.status === 'connecting' ? 'Connessione…' : 'Connetti' }}</AppButton>
+        <AppButton :icon="Link" :disabled="!manualCode.trim()" @click="submitCode">{{ sync.status === 'connecting' ? 'Riprova' : 'Connetti' }}</AppButton>
       </div>
+      <p v-if="sync.status === 'connecting'" class="connection-status" role="status" aria-live="polite"><LoaderCircle :size="20" aria-hidden="true" />{{ connectionNotice || 'Tentativo di connessione all’Host in corso…' }}</p>
       <AppButton v-if="!scannerActive && !props.initialCode && sync.status !== 'connecting'" variant="ghost" :icon="Camera" @click="startScanner">Riprova fotocamera</AppButton>
       <small>La fotocamera richiede HTTPS o localhost. Non vengono registrate immagini.</small>
     </div>
@@ -126,5 +133,5 @@ onBeforeUnmount(() => { void stopScanner() })
 </template>
 
 <style scoped>
-.join-content{display:grid;gap:var(--space-4)}.join-content>p{margin:0;color:var(--color-text-muted);line-height:1.55}.scanner{min-height:260px;border-radius:var(--radius-md);background:var(--color-surface-subtle);overflow:hidden}.scanner--hidden{display:none}.manual-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:var(--space-3)}.error{color:var(--color-danger)!important;font-size:var(--text-sm)}small{color:var(--color-text-muted);line-height:1.45}@media(max-width:520px){.manual-entry{grid-template-columns:1fr}.manual-entry :deep(button){width:100%}}
+.join-content{display:grid;gap:var(--space-4)}.join-content>p{margin:0;color:var(--color-text-muted);line-height:1.55}.scanner{min-height:260px;border-radius:var(--radius-md);background:var(--color-surface-subtle);overflow:hidden}.scanner--hidden{display:none}.manual-entry{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:var(--space-3)}.connection-status{display:flex;align-items:center;gap:var(--space-2);padding:var(--space-3);color:var(--color-accent-text)!important;border:1px solid var(--color-primary-strong);border-radius:var(--radius-sm);background:var(--color-primary-soft);font-size:var(--text-sm)}.connection-status svg{flex:0 0 auto;animation:spin .9s linear infinite}.error{color:var(--color-danger)!important;font-size:var(--text-sm)}small{color:var(--color-text-muted);line-height:1.45}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:520px){.manual-entry{grid-template-columns:1fr}.manual-entry :deep(button){width:100%}}
 </style>
