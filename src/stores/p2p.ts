@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import Peer, { type DataConnection, type PeerError, type PeerErrorType } from 'peerjs'
+import Peer, { type DataConnection, type PeerError, type PeerErrorType, type PeerJSOption } from 'peerjs'
 import type { ConnectionStatus, SessionRole, SyncAction, SyncMessage } from '@/models'
 import { parseSyncMessage } from '@/services/syncProtocol'
 import { useGameStore } from '@/stores/game'
@@ -8,6 +8,16 @@ import { createId } from '@/utils/id'
 
 export const SESSION_STORAGE_KEY = 'ligretto-scoreboard.p2p-session.v1'
 const APP_PROTOCOL = 'ligretto-scoreboard-v1'
+const CONNECTION_TIMEOUT_MS = 12_000
+const PEER_OPTIONS: PeerJSOption = {
+  debug: 1,
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' }
+    ]
+  }
+}
 
 interface StoredSession {
   schemaVersion: 1
@@ -49,6 +59,7 @@ export const useP2pStore = defineStore('p2p', () => {
   const clientConnections = new Map<string, DataConnection>()
   const processedActions = new Set<string>()
   let reconnectTimer: ReturnType<typeof setTimeout> | undefined
+  let connectionTimer: ReturnType<typeof setTimeout> | undefined
   let generation = 0
   let fallbackAttempted = false
 
@@ -165,6 +176,7 @@ export const useP2pStore = defineStore('p2p', () => {
     connection.on('open', () => {
       if (generation !== expectedGeneration) return connection.close()
       clearTimeout(reconnectTimer)
+      clearTimeout(connectionTimer)
       status.value = 'connected'
       errorMessage.value = ''
       connectedDevices.value = Math.max(2, connectedDevices.value)
@@ -173,24 +185,45 @@ export const useP2pStore = defineStore('p2p', () => {
     connection.on('data', onClientData)
     connection.on('close', () => {
       if (generation !== expectedGeneration || hostConnection !== connection) return
+      clearTimeout(connectionTimer)
+      const wasSynced = synced.value
       hostConnection = undefined
       synced.value = false
-      status.value = 'connecting'
       connectedDevices.value = 1
-      scheduleClientReconnect(expectedGeneration)
+      if (wasSynced) {
+        status.value = 'connecting'
+        scheduleClientReconnect(expectedGeneration)
+      } else {
+        status.value = 'error'
+        errorMessage.value = 'Connessione WebRTC interrotta prima di ricevere la partita.'
+      }
     })
     connection.on('error', () => {
       if (generation !== expectedGeneration) return
-      status.value = 'connecting'
-      scheduleClientReconnect(expectedGeneration)
+      clearTimeout(connectionTimer)
+      status.value = 'error'
+      errorMessage.value = 'Negoziazione WebRTC fallita. Prova un’altra rete o disattiva VPN e firewall.'
+    })
+    connection.on('iceStateChanged', (state) => {
+      if (generation !== expectedGeneration || hostConnection !== connection || state !== 'failed') return
+      clearTimeout(connectionTimer)
+      status.value = 'error'
+      errorMessage.value = 'La rete impedisce la connessione diretta WebRTC. Potrebbe essere necessario un server TURN.'
     })
   }
 
   function connectToHost(expectedGeneration: number) {
     if (!peer || peer.destroyed || generation !== expectedGeneration || !hostId.value) return
     status.value = 'connecting'
+    errorMessage.value = ''
     const connection = peer.connect(hostId.value, { reliable: true, serialization: 'json', metadata: { protocol: APP_PROTOCOL } })
     attachHostConnection(connection, expectedGeneration)
+    clearTimeout(connectionTimer)
+    connectionTimer = setTimeout(() => {
+      if (generation !== expectedGeneration || hostConnection !== connection || connection.open) return
+      status.value = 'error'
+      errorMessage.value = 'Tempo scaduto: l’Host non ha completato la connessione WebRTC. Verifica che mostri “Host in attesa” e riprova.'
+    }, CONNECTION_TIMEOUT_MS)
   }
 
   function bindPeerEvents(instance: Peer, expectedGeneration: number) {
@@ -213,10 +246,16 @@ export const useP2pStore = defineStore('p2p', () => {
         createHostPeer(undefined, expectedGeneration)
         return
       }
-      if (role.value === 'client' && (error.type === 'peer-unavailable' || error.type === 'network')) {
-        status.value = 'connecting'
-        errorMessage.value = 'Host non raggiungibile. Nuovo tentativo in corso.'
-        scheduleClientReconnect(expectedGeneration)
+      if (role.value === 'client' && error.type === 'peer-unavailable') {
+        clearTimeout(connectionTimer)
+        status.value = 'error'
+        errorMessage.value = 'Codice non attivo sul server PeerJS. Genera un nuovo QR mantenendo aperta la pagina Host.'
+        return
+      }
+      if (role.value === 'client' && error.type === 'network') {
+        clearTimeout(connectionTimer)
+        status.value = 'error'
+        errorMessage.value = 'PeerJS Cloud non raggiungibile dalla rete corrente sulla porta HTTPS 443.'
         return
       }
       status.value = 'error'
@@ -227,7 +266,9 @@ export const useP2pStore = defineStore('p2p', () => {
   function resetTransport() {
     generation += 1
     clearTimeout(reconnectTimer)
+    clearTimeout(connectionTimer)
     reconnectTimer = undefined
+    connectionTimer = undefined
     hostConnection?.close()
     hostConnection = undefined
     for (const connection of clientConnections.values()) connection.close()
@@ -241,7 +282,7 @@ export const useP2pStore = defineStore('p2p', () => {
 
   function createHostPeer(preferredId: string | undefined, expectedGeneration: number) {
     peer?.destroy()
-    peer = preferredId ? new Peer(preferredId) : new Peer()
+    peer = preferredId ? new Peer(preferredId, PEER_OPTIONS) : new Peer(PEER_OPTIONS)
     const instance = peer
     bindPeerEvents(instance, expectedGeneration)
     instance.on('open', (id) => {
@@ -270,7 +311,7 @@ export const useP2pStore = defineStore('p2p', () => {
 
   function createClientPeer(expectedGeneration: number) {
     peer?.destroy()
-    peer = new Peer()
+    peer = new Peer(PEER_OPTIONS)
     const instance = peer
     bindPeerEvents(instance, expectedGeneration)
     instance.on('open', (idValue) => {

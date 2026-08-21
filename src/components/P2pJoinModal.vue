@@ -112,13 +112,13 @@ onBeforeUnmount(() => { void stopScanner() })
   <AppModal :open="open" title="Connetti tramite QR" @close="close">
     <div class="join-content">
       <p>Inquadra il QR Code mostrato dall’Host oppure inserisci il codice della sessione.</p>
-      <div :id="scannerId" class="scanner" :class="{ 'scanner--hidden': Boolean(props.initialCode) }"></div>
+      <div :id="scannerId" class="scanner" :class="{ 'scanner--hidden': !scannerActive || Boolean(props.initialCode) }"></div>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <div class="manual-entry">
         <AppInput v-model="manualCode" label="Codice sessione" autocomplete="off" @keyup.enter="submitCode" />
         <AppButton :icon="Link" :disabled="sync.status === 'connecting'" @click="submitCode">{{ sync.status === 'connecting' ? 'Connessione…' : 'Connetti' }}</AppButton>
       </div>
-      <AppButton v-if="!scannerActive && !props.initialCode" variant="ghost" :icon="Camera" @click="startScanner">Riprova fotocamera</AppButton>
+      <AppButton v-if="!scannerActive && !props.initialCode && sync.status !== 'connecting'" variant="ghost" :icon="Camera" @click="startScanner">Riprova fotocamera</AppButton>
       <small>La fotocamera richiede HTTPS o localhost. Non vengono registrate immagini.</small>
     </div>
   </AppModal>
